@@ -2,6 +2,8 @@
 
 TDMentions is a dataset that contains mentions of technical debt from Reddit, Hacker News, and Stack Exchange. It also contains a list of blog posts on Medium that were tagged as technical debt. The dataset currently contains approximately 32,000 items. 
 
+The dataset is available at [http://dx.doi.org/10.5281/zenodo.2593142](http://dx.doi.org/10.5281/zenodo.2593142). 
+
 ## Data collection and processing
 
 The dataset is mainly collected from existing datasets. We used data from:
@@ -83,8 +85,6 @@ lbzip2 -cd postscomments.json.bz2 | jq -r '[.id, .body, .author] | @csv'
 ```
 
 Note that you need to specify the keys you want to include for the CSV, so it is easier to either ignore the meta information or process each source.
-
-Please see [https://github.com/sse-lnu/tdmentions](https://github.com/sse-lnu/tdmentions) for more analyses.
 
 # Limitations and Future updates
 
