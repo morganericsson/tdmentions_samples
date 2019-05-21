@@ -1,41 +1,91 @@
-# TD Mentions
+# TDMentions: A Dataset of Technical Debt Mentions in Online Posts (version 1.0)
 
-The data from Hacker News, Medium, Reddit, and Stack Exchange is structured as follows. The content is divided into *submissions* and *comments*, where a submission is an initial question, comment, or reference to a website. Each submission can have comments. 
+TDMentions is a dataset that contains mentions of technical debt from Reddit, Hacker News, and Stack Exchange. It also contains a list of blog posts on Medium that were tagged as technical debt. The dataset currently contains approximately 32,000 items. 
 
-**Submissions**
+## Data collection and processing
 
-The submissions data contains the following attributes:
+The dataset is mainly collected from existing datasets. We used data from:
 
-- _id_, internal row id.
-- _title_, the title of the submission.
-- _author_, an internal representation of the user. Uniquely identifies a user within this dataset.
-- _text_, the text of the submission (if available).
-- _url_, the url of the submission (if available).
-- _subforum_, the part of the site the submission was submitted to (if applicable), e.g., subreddit or Stack Exchange site.
-- _score_, the score of the submission as a numerical value, e.g., sum of up and downvotes, claps, etc.
-- _created_, timestamp of when the submission was submitted (seconds UTC).
-- _source_, source of the submission, e.g., Reddit, Medium, ... .
+- the archive of Reddit posts by Jason Baumgartner (available at [https://pushshift.io](https://pushshift.io), 
+- the archive of Hacker News available at Google's BigQuery (available at [https://console.cloud.google.com/marketplace/details/y-combinator/hacker-news](https://console.cloud.google.com/marketplace/details/y-combinator/hacker-news)), and the Stack Exchange data dump (available at [https://archive.org/details/stackexchange](https://archive.org/details/stackexchange)). 
+- the [GHTorrent](http://ghtorrent.org) project 
+- the [GH Archive](https://www.gharchive.org)
 
-**Comments**
+The data set currently contains data from the start of each source/service until 2018-12-31. For GitHub, we currently only include data from 2015-01-01.
 
-The comments data contains the following attributes:
+We use the regular expression `tech(nical)?[\s\-_]*?debt` to find mentions in all sources except for Medium. We decided to limit our matches to variations of technical debt and tech debt. Other shorter forms, such as TD, can result in too many false positives. For Medium, we used the tag `technical-debt`. 
 
-- _id_, internal row id.
-- _author_, an internal representation of the user. Uniquely identifies a user within this dataset.
-- _text_, the text of the comment.
-- _subforum_, the part of the site the comment was submitted to (if applicable), e.g., subreddit or Stack Exchange site.
-- _parent_, the parent comment of this comment. Empty/null if the comment is directly on the submission.
-- _submission_, the submission this comment belongs to. 
-- _score_, the score of the submission as a numerical value, e.g., sum of up and downvotes, claps, etc.
-- _created_, timestamp of when the comment was submitted (seconds UTC).
+## Data Format
 
-**TD Mentions**
+The dataset is stored as a compressed (bzip2) JSON file with one JSON object per line. Each mention is represented as a JSON object with the following keys.
 
-The submissions and comments data is the closure of all mentions of technical debt. For example, if a comment mentions technical debt, the submission and all other comments are included, even if they do not mention technical debt, to provide context. The *TD Mentions* data is a collection of internal ids of submissions and comments that explicitly mentions technical debt. It contains the following attributes:
+- `id`: the id used in the original source. We use the URL path to identify Medium posts.
+- `body`: the text that contains the mention. This is either the comment or the title of the post. For Medium posts this is the title and subtitle (which might not mention technical debt, since posts are identified by the tag).
+- `created_utc`: the time the item was posted in seconds since epoch in UTC. 
+- `author`: the author of the item. We use the username or userid from the source.
+- `source`: where the item was posted. Valid sources are:
+    - HackerNews Comment
+    - HackerNews Job
+    - HackerNews Submission
+    - Reddit Comment
+    - Reddit Submission
+    - StackExchange Answer
+    - StackExchange Comment
+    - StackExchange Question
+    - Medium Post
+- `meta`: Additional information about the item specific to the source. This includes, e.g., the subreddit a Reddit submission or comment was posted to, the score, etc. We try to use the same names, e.g., `score` and `num_comments` for keys that have the same meaning/information across multiple sources.
 
-- _id_, the id of the entity that mentions technical debt
-- _class_, the class of the entity, submission or comment
+This is a sample item from Reddit:
 
-**Mapping to source**
+```JSON
+{
+  "id": "ab8auf",
+  "body": "Technical Debt Explained (x-post r/Eve)",
+  "created_utc": 1546271789,
+  "author": "totally_100_human",
+  "source": "Reddit Submission",
+  "meta": {
+    "title": "Technical Debt Explained (x-post r/Eve)",
+    "score": 1,
+    "num_comments": 0,
+    "url": "http://jestertrek.com/eve/technical-debt-2.png",
+    "subreddit": "RCBRedditBot"
+  }
+}
+```
 
-To allow for validation of the dataset or studies that require additional data, a mapping between the internal id of submissions and comments, and the source, e.g., submission on Reddit is available on request. To ensure that the data is available, this mapping uses the internal id of the dataset that was used, e.g., the dumps of Reddit.
+## Sample Analyses
+
+We decided to use JSON to store the data, since it is easy to work with from multiple programming languages. In the following examples, we use [`jq`](https://stedolan.github.io/jq/) to process the JSON.
+
+### How many items are there for each source?
+
+```
+lbzip2 -cd postscomments.json.bz2 | jq '.source' | sort | uniq -c
+```
+
+### How many submissions that mentioned technical debt were posted each month?
+
+```
+lbzip2 -cd postscomments.json.bz2 | jq 'select(.source == "Reddit Submission") | .created_utc | strftime("%Y-%m")' | sort | uniq -c
+```
+
+### What are the titles of items that link (`meta.url`) to PDF documents?
+
+```
+lbzip2 -cd postscomments.json.bz2 | jq '. as $r | select(.meta.url?) | .meta.url | select(endswith(".pdf")) | $r.body'
+```
+
+### Please, I want CSV!
+
+```
+lbzip2 -cd postscomments.json.bz2 | jq -r '[.id, .body, .author] | @csv'
+```
+
+Note that you need to specify the keys you want to include for the CSV, so it is easier to either ignore the meta information or process each source.
+
+Please see [https://github.com/sse-lnu/tdmentions](https://github.com/sse-lnu/tdmentions) for more analyses.
+
+# Limitations and Future updates
+
+The current version of the dataset lacks GitHub data and Medium comments. GitHub data will be added in the next update. Medium comments (responses) will be added in a future update if we find a good way to represent these.
